@@ -3,6 +3,7 @@ import pandas as pd
 from pathlib import Path
 import fnmatch
 import json
+from typing import Optional
 from .helpers import _sanitize_value
 
 
@@ -148,3 +149,32 @@ def find_file_tool(
         f"find_file_tool: found {len(matches)} matches for pattern '{filename_pattern}' under '{start_path}'"
     )
     return {"paths": matches, "count": len(matches)}
+
+
+def geopandas_plot_tool(shapefile_paths: list[str], output_image_path: str, title: Optional[str] = None):
+    """
+    Plot the geometries from one or more shapefiles and save the plot as a PNG image.
+    - shapefile_paths: A list of paths to the shapefiles to plot.
+    - output_image_path: Path where the output PNG image will be saved.
+    - title: Optional title for the plot.
+
+    Returns {'image_path': str} on success or {'error': str} on failure.
+    """
+    try:
+        import matplotlib.pyplot as plt
+        # Create a single axis for all plots
+        fig, ax = plt.subplots(1, 1)
+        
+        for shapefile_path in shapefile_paths:
+            gdf = gpd.read_file(shapefile_path)
+            gdf.plot(ax=ax, legend=True, alpha=0.7) # Plot each shapefile on the same axis
+        
+        if title:
+            ax.set_title(title)
+        ax.set_axis_off()
+        plt.savefig(output_image_path)
+        plt.close(fig)  # Close the plot to free up memory
+    except Exception as e:
+        return {"error": f"failed to plot or save image: {e}"}
+
+    return {"image_path": output_image_path}

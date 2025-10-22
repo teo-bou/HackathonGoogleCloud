@@ -1,6 +1,6 @@
 from google.adk.agents.llm_agent import Agent
 from .helpers import register_tool
-from .tools import find_file_tool, geopandas_attributes_tool, geopandas_query_tool
+from .tools import find_file_tool, geopandas_attributes_tool, geopandas_query_tool, geopandas_plot_tool
 
 
 root_agent = Agent(
@@ -43,5 +43,16 @@ register_tool(
         "Read attribute schema and sample records from a vector file. "
         "Args: shapefile_path(str), max_sample_rows(int, optional). "
         "Returns columns, dtypes, crs, count, and sample records (geometry excluded)."
+    ),
+)
+
+register_tool(
+    root_agent,
+    name="geopandas_plot",
+    func=geopandas_plot_tool,
+    description=(
+        "Plot the geometries from one or more shapefiles and save the plot as a PNG image." 
+        "Args: shapefile_paths(list[str]), output_image_path(str), title(str, optional)."
+        "Returns the path to the saved image on success."
     ),
 )
