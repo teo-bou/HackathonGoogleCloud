@@ -21,6 +21,15 @@ register_tool(
         "filename_pattern(str, glob-style, optional), max_results(int, optional), recursive(bool, optional). "
         "Returns matching file paths and count."
     ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "start_path": {"type": "string"},
+            "filename_pattern": {"type": "string"},
+            "max_results": {"type": "integer"},
+            "recursive": {"type": "boolean"},
+        },
+    },
 )
 
 
@@ -33,6 +42,15 @@ register_tool(
         "Execute an attribute query (pandas .query syntax) on a vector file and return GeoJSON. "
         "Args: shapefile_path(str), query(str), max_results(int, optional)."
     ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "shapefile_path": {"type": "string"},
+            "query": {"type": "string"},
+            "max_results": {"type": "integer"},
+        },
+        "required": ["shapefile_path", "query"],
+    },
 )
 
 register_tool(
@@ -44,4 +62,12 @@ register_tool(
         "Args: shapefile_path(str), max_sample_rows(int, optional). "
         "Returns columns, dtypes, crs, count, and sample records (geometry excluded)."
     ),
+    parameters={
+        "type": "object",
+        "properties": {
+            "shapefile_path": {"type": "string"},
+            "max_sample_rows": {"type": "integer"},
+        },
+        "required": ["shapefile_path"],
+    },
 )

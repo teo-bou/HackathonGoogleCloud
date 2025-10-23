@@ -2,7 +2,7 @@ import math
 import types
 
 
-def register_tool(agent, name: str, func, description: str):
+def register_tool(agent, name: str, func, description: str, parameters: dict = None):
     """Register a tool on agent using whichever API exists.
 
     Tries, in order: agent.add_tool(...), agent.register_tool(...),
@@ -12,14 +12,21 @@ def register_tool(agent, name: str, func, description: str):
     # Preferred method: add_tool
     try:
         add = getattr(agent, "add_tool")
-        return add(name=name, func=func, description=description)
+        # Try to pass parameter schema if the API supports it
+        try:
+            return add(name=name, func=func, description=description, parameters=parameters)
+        except TypeError:
+            return add(name=name, func=func, description=description)
     except Exception:
         pass
 
     # Alternate method: register_tool
     try:
         reg = getattr(agent, "register_tool")
-        return reg(name=name, func=func, description=description)
+        try:
+            return reg(name=name, func=func, description=description, parameters=parameters)
+        except TypeError:
+            return reg(name=name, func=func, description=description)
     except Exception:
         pass
 
@@ -36,7 +43,8 @@ def register_tool(agent, name: str, func, description: str):
             return func
         if isinstance(tools_attr, dict):
             # keep backwards compatibility if tools is a mapping
-            tools_attr[name] = func
+            # store function and optional parameter schema
+            tools_attr[name] = {"func": func, "parameters": parameters}
             return func
     except Exception:
         # fall through to final fallback
@@ -46,7 +54,7 @@ def register_tool(agent, name: str, func, description: str):
     if not hasattr(agent, "_tools"):
         setattr(agent, "_tools", {})
 
-    agent._tools[name] = {"func": func, "description": description}
+    agent._tools[name] = {"func": func, "description": description, "parameters": parameters}
     # expose a convenience method if needed: ensure add_tool appends to agent.tools
     if not hasattr(agent, "add_tool"):
 
