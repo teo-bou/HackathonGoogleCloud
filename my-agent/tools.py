@@ -3,7 +3,7 @@ import pandas as pd
 from pathlib import Path
 import fnmatch
 import json
-from .helpers import _sanitize_value
+from .helpers import _sanitize_value, _sanitize_records
 
 
 def _geojson_from_gdf(gdf):
@@ -18,7 +18,7 @@ def _geojson_from_gdf(gdf):
         geom = feat.get("geometry")
         if geom is None and "geometry" in feat:
             feat["geometry"] = None
-    return json.dumps(geo, ensure_ascii=False)
+    return json.dumps(geo, ensure_ascii=False, allow_nan=False)
 
 
 def geopandas_attributes_tool(shapefile_path: str, max_sample_rows: int = 10):
@@ -28,7 +28,7 @@ def geopandas_attributes_tool(shapefile_path: str, max_sample_rows: int = 10):
     or {'error': str} on failure.
     """
     try:
-        gdf = gpd.read_file(shapefile_path)
+        gdf = gpd.read_file(shapefile_path) # read the vector file
     except Exception as e:
         return {"error": f"failed to read file: {e}"}
 
@@ -36,13 +36,21 @@ def geopandas_attributes_tool(shapefile_path: str, max_sample_rows: int = 10):
         columns = list(gdf.columns)
         dtypes = {col: str(gdf[col].dtype) for col in columns}
         crs = str(gdf.crs) if gdf.crs is not None else None
-        count = len(gdf)
+        count = int(len(gdf))
 
         # Provide sample attribute rows (exclude geometry column if present)
-        sample_df = gdf.drop(columns="geometry", errors="ignore").head(max_sample_rows)
+        sample_df = gdf.drop(columns="geometry", errors="ignore").head(max_sample_rows).copy()
+        
+        # transform all colons to object 
+        sample_df = sample_df.astype("object")
+        # replace NaN/NA to None
+        sample_df = sample_df.where(pd.notnull(sample_df),None)
+
+        sample = _sanitize_records(sample_df.to_dict(orient="records"))
+
         # Replace NaN/NA with None so JSON serialization doesn't include invalid NaN tokens
-        sample_df = sample_df.where(pd.notnull(sample_df), None)
-        sample = sample_df.to_dict(orient="records")
+        #sample_df = sample_df.where(pd.notnull(sample_df), None)
+        #sample = sample_df.to_dict(orient="records")
     except Exception as e:
         return {"error": f"failed to inspect attributes: {e}"}
 
@@ -73,7 +81,7 @@ def geopandas_query_tool(shapefile_path: str, query: str, max_results: int = 100
 
     if result.empty:
         return {
-            "geojson": json.dumps({"type": "FeatureCollection", "features": []}),
+            "geojson": json.dumps({"type": "FeatureCollection", "features": []}, allow_nan=False),
             "count": 0,
         }
 
