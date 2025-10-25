@@ -2,3 +2,5 @@ my-agent/__pycache__
 my-agent/.DS_Store
 my-agent/.env
 .DS_Store
+reforestAI-agent/__pycache__
+reforestAI-agent/.env
