@@ -6,3 +6,6 @@ pytest>=7.0
 flake8>=6.0
 pandas
 google-adk
+streamlit
+folium 
+streamlit-folium

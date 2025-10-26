@@ -9,6 +9,7 @@ from .tools import (
     list_file_in_map_data_directory,
     select_by_geometry,
     enrich_geometry_fields,
+    folium_show_layers, 
 )
 
 
@@ -25,5 +26,6 @@ root_agent = Agent(
         query_geojson,
         select_by_geometry,
         enrich_geometry_fields,
+        folium_show_layers,
     ],
 )

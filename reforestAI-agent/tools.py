@@ -401,3 +401,105 @@ def enrich_geometry_fields(
             "status": "error",
             "message": f"failed to serialize enriched GeoJSON: {e}",
         }
+
+
+def folium_show_layers(
+    layers: List[Dict[str, Any]],
+    center: Optional[List[float]] = None,
+    zoom_start: int = 7,
+    tiles: str = "OpenStreetMap",
+    outfile_name: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    Display multiple geographic layers (GeoJSON) on a Folium map,
+    with customizable styles and tooltips, then save this map to an HTML file.
+    
+    
+    layers: list of dicts:
+    - path: str (relative to repo or absolute)
+    - name: str
+    - style: dict (fillColor, color, fillOpacity, weight, etc.)
+    - tooltip_fields: list[str]
+    - tooltip_aliases: list[str]
+    Returns: dict with status and html_path
+    """
+    import folium, json, os
+    from pathlib import Path
+    import streamlit_folium # optional, not used to save html but for testing locally
+
+    # helper to resolve path in repo
+    REPO_ROOT = Path.cwd()  # adjust if repo root differs
+    REPO_GEOJSON_DIR = REPO_ROOT / "map_data" / "geojson"
+
+    # default center (Madagascar) if not provided
+    if center is None:
+        center = [-19.0, 47.0]
+
+    m = folium.Map(location=center, zoom_start=zoom_start, tiles=tiles)
+
+    for layer in layers:
+        raw_path = layer.get("path")
+        if not raw_path:
+            continue
+        p = Path(raw_path)
+        if not p.is_absolute():
+            p = REPO_GEOJSON_DIR / raw_path
+        if not p.exists():
+            p = REPO_ROOT / raw_path
+        if not p.exists():
+            # skip missing layer
+            continue
+
+        try:
+            geojson_data = json.loads(p.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+
+        style = layer.get("style") or {}
+        gj = folium.GeoJson(
+            geojson_data,
+            name=layer.get("name", p.stem),
+            style_function=(lambda f, s=style: s) if style else None,
+        )
+
+        tooltip_fields = layer.get("tooltip_fields")
+        tooltip_aliases = layer.get("tooltip_aliases")
+        if tooltip_fields:
+            folium.GeoJsonTooltip(
+                fields=tooltip_fields,
+                aliases=tooltip_aliases or tooltip_fields,
+                sticky=True,
+            ).add_to(gj)
+
+        gj.add_to(m)
+
+    folium.LayerControl().add_to(m)
+
+    # Determine output path for the HTML file and ensure parent directories exist.
+    outdir = Path("output")
+    # Normalize outfile_name: accept absolute paths or relative paths that may already include 'output/'.
+    if not outfile_name:
+        outfile_name = f"folium_map_{os.getpid()}.html"
+
+    candidate = Path(outfile_name)
+    if candidate.is_absolute():
+        outpath = candidate
+    else:
+        # If the user provided a relative path that already starts with the output directory
+        # (e.g. "output/grevillea.html"), resolve it relative to the repo root so we don't
+        # accidentally create output/output/...
+        if len(candidate.parts) > 0 and candidate.parts[0] == outdir.name:
+            outpath = Path.cwd() / candidate
+        else:
+            outpath = outdir / candidate
+
+    # Ensure the parent directory exists before saving
+    try:
+        outpath.parent.mkdir(parents=True, exist_ok=True)
+    except Exception:
+        # If we cannot create the directory, raise a clear error so the caller can handle it
+        raise
+
+    m.save(str(outpath))
+
+    return {"status": "success", "html_path": str(outpath), "layers": layers}

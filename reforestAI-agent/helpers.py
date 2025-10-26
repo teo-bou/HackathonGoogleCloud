@@ -21,9 +21,21 @@ def write_geojson_file(geojson: dict, path: str) -> str:
     """
     Writes a geojson file
     """
-    with open(path, "w") as f:
-        json.dump(geojson, f)
-    return path
+    # Ensure parent directory exists (helps on Windows where '/tmp' may not exist)
+    from pathlib import Path
+
+    p = Path(path)
+    if not p.parent.exists():
+        try:
+            p.parent.mkdir(parents=True, exist_ok=True)
+        except Exception:
+            # If we cannot create the parent, raise a clear error
+            raise
+
+    # Write JSON with UTF-8 encoding and ensure_ascii=False for readability
+    with open(p, "w", encoding="utf-8") as f:
+        json.dump(geojson, f, ensure_ascii=False)
+    return str(p)
 
 
 def _sanitize_value(v):

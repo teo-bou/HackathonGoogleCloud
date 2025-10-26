@@ -5,6 +5,11 @@ import os
 import uuid
 import time
 from pathlib import Path
+#from .streamlit_test import make_folium_map, REPO_GEOJSON_DIR
+
+import streamlit.components.v1 as components
+from pathlib import Path
+import json
 
 
 # Set page config
@@ -101,6 +106,8 @@ def send_message(message):
     # Extract assistant's text response
     assistant_message = None
     png_path = None  # ensure this variable always exists
+    folium_html_path = None
+    folium_layers_payload = None
 
     for event in events:
         content = event.get("content", {})
@@ -118,9 +125,10 @@ def send_message(message):
             and "text" in parts[0]
         ):
             assistant_message = parts[0]["text"]
-        # Look for geojson_to_png function response to extract image file path
+        # Look for functionResponse objects and extract known artifacts
         if parts and isinstance(parts[0], dict) and "functionResponse" in parts[0]:
             func_response = parts[0]["functionResponse"]
+            # geojson_to_png (existing behaviour)
             if func_response.get("name") == "geojson_to_png":
                 response_content = (
                     func_response.get("response", {})
@@ -130,11 +138,34 @@ def send_message(message):
                 if response_content:
                     png_path = response_content
 
-    # Add assistant response to chat (include png_path even if None)
+            # folium_show_layers: agent returns an HTML map path and/or the layers payload
+            if func_response.get("name") == "folium_show_layers":
+                resp = func_response.get("response", {}) or {}
+                # Try common locations for the html_path
+                html_path = resp.get("html_path")
+                if not html_path:
+                    # sometimes nested under 'message' or 'data'
+                    msg_part = resp.get("message")
+                    if isinstance(msg_part, dict):
+                        html_path = msg_part.get("html_path")
+                    if not html_path and isinstance(resp.get("data"), dict):
+                        html_path = resp.get("data", {}).get("html_path")
+
+                folium_html_path = html_path
+                # keep full layers payload as fallback (the agent may return layers)
+                folium_layers_payload = resp.get("layers") or (
+                    msg_part.get("layers") if isinstance(msg_part, dict) else None
+                )
+
+    # Add assistant response to chat (include png_path and folium info if present)
     if assistant_message:
-        st.session_state.messages.append(
-            {"role": "assistant", "content": assistant_message, "png_path": png_path}
-        )
+        msg_entry = {"role": "assistant", "content": assistant_message, "png_path": png_path}
+        if folium_html_path:
+            msg_entry["folium_html_path"] = folium_html_path
+        if folium_layers_payload:
+            # store payload so Streamlit can render locally if HTML file isn't available
+            msg_entry["layers"] = folium_layers_payload
+        st.session_state.messages.append(msg_entry)
 
     return True
 
@@ -186,6 +217,38 @@ for msg in st.session_state.messages:
                     st.image(str(p))
                 else:
                     st.warning(f"Image file not accessible: {p}")
+            # Handle Folium HTML map if available
+            if "folium_html_path" in msg and msg["folium_html_path"]:
+                html_path = msg["folium_html_path"]
+                p = Path(html_path)
+                if not p.is_absolute():
+                    p = REPO_ROOT / html_path
+                if not p.exists():
+                    p = OUTPUT_DIR / p.name
+
+                if p.exists():
+                    try:
+                        html = p.read_text(encoding="utf-8")
+                        components.html(html, height=700, scrolling=True)
+                    except Exception as e:
+                        st.error(f"Failed to read/display Folium HTML: {e}")
+                else:
+                    st.warning(f"Folium HTML file not accessible: {p}")
+                    # fallback: if the tool returned layers payload, build map locally
+                    layers = msg.get("layers")
+                    if layers:
+                        try:
+                            m, html_path_local = make_folium_map(
+                                layers,
+                                center=msg.get("center"),
+                                zoom_start=msg.get("zoom_start"),
+                                outfile_name=msg.get("outfile_name"),
+                            )
+                            from streamlit_folium import st_folium
+
+                            st_folium(m, width=800, height=600)
+                        except Exception as e:
+                            st.error(f"Failed to render Folium layers locally: {e}")
 # Input for new messages
 if st.session_state.session_id:  # Only show input if session exists
     user_input = st.chat_input("Type your message...")
