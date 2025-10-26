@@ -4,9 +4,11 @@ from .prompts import instructions
 from .tools import (
     query_geojson,
     combine_multiple_geojson,
-    shapefile_to_geojson,
+    transform_geojson,
     geojson_to_png,
     list_file_in_map_data_directory,
+    select_by_geometry,
+    enrich_geometry_fields,
 )
 
 
@@ -16,10 +18,12 @@ root_agent = Agent(
     description="ReforestAI agent to assist with geospatial data analysis tasks.",
     instruction=instructions,
     tools=[
-        shapefile_to_geojson,
         geojson_to_png,
         combine_multiple_geojson,
         list_file_in_map_data_directory,
+        transform_geojson,
         query_geojson,
+        select_by_geometry,
+        enrich_geometry_fields,
     ],
 )

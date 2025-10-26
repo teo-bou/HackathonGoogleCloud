@@ -2,6 +2,28 @@ import math
 from datetime import date, datetime
 import numpy as np
 import pandas as pd
+import json
+
+
+def load_geojson_file(path: str):
+    """
+    Loads a geojson file
+    """
+    # Open and parse the GeoJSON file. Use json.load to parse directly from
+    # the file-like object (previous code accidentally passed the file object
+    # to f.read, causing a TypeError).
+    with open(path, "r") as f:
+        geojson = json.load(f)
+    return geojson
+
+
+def write_geojson_file(geojson: dict, path: str) -> str:
+    """
+    Writes a geojson file
+    """
+    with open(path, "w") as f:
+        json.dump(geojson, f)
+    return path
 
 
 def _sanitize_value(v):
