@@ -1,5 +1,6 @@
 from google.adk.agents.llm_agent import Agent
 from .prompts import instructions
+from google.adk.tools import google_search
 
 from .tools import (
     query_geojson,
@@ -9,7 +10,8 @@ from .tools import (
     list_file_in_map_data_directory,
     select_by_geometry,
     enrich_geometry_fields,
-    folium_show_layers, 
+    folium_show_layers,
+    read_geojson_attributes,
 )
 
 
@@ -27,5 +29,7 @@ root_agent = Agent(
         select_by_geometry,
         enrich_geometry_fields,
         folium_show_layers,
+        read_geojson_attributes,
+        google_search,
     ],
 )

@@ -413,8 +413,11 @@ def folium_show_layers(
     """
     Display multiple geographic layers (GeoJSON) on a Folium map,
     with customizable styles and tooltips, then save this map to an HTML file.
-    
-    
+
+    The map will be centered and zoomed to the combined bounds of the provided layers
+    (if any layers contain geometry). If no geometry is found, falls back to the
+    provided `center` or the default center.
+
     layers: list of dicts:
     - path: str (relative to repo or absolute)
     - name: str
@@ -425,7 +428,7 @@ def folium_show_layers(
     """
     import folium, json, os
     from pathlib import Path
-    import streamlit_folium # optional, not used to save html but for testing locally
+    import streamlit_folium  # optional, not used to save html but for testing locally
 
     # helper to resolve path in repo
     REPO_ROOT = Path.cwd()  # adjust if repo root differs
@@ -435,7 +438,11 @@ def folium_show_layers(
     if center is None:
         center = [-19.0, 47.0]
 
+    # create map with initial center; we'll call fit_bounds later if we can compute bounds
     m = folium.Map(location=center, zoom_start=zoom_start, tiles=tiles)
+
+    # collect bounds from layers (minx, miny, maxx, maxy)
+    bounds_list = []
 
     for layer in layers:
         raw_path = layer.get("path")
@@ -454,6 +461,20 @@ def folium_show_layers(
             geojson_data = json.loads(p.read_text(encoding="utf-8"))
         except Exception:
             continue
+
+        # attempt to compute bounds using geopandas if possible
+        try:
+            feats = (
+                geojson_data.get("features") if isinstance(geojson_data, dict) else None
+            )
+            if feats:
+                gdf = gpd.GeoDataFrame.from_features(feats)
+                if not gdf.empty:
+                    minx, miny, maxx, maxy = map(float, gdf.total_bounds)
+                    bounds_list.append((minx, miny, maxx, maxy))
+        except Exception:
+            # ignore bounds computation failure for this layer
+            pass
 
         style = layer.get("style") or {}
         gj = folium.GeoJson(
@@ -474,6 +495,27 @@ def folium_show_layers(
         gj.add_to(m)
 
     folium.LayerControl().add_to(m)
+
+    # If we accumulated bounds from one or more layers, compute the union bounds and fit the map
+    if bounds_list:
+        try:
+            minx = min(b[0] for b in bounds_list)
+            miny = min(b[1] for b in bounds_list)
+            maxx = max(b[2] for b in bounds_list)
+            maxy = max(b[3] for b in bounds_list)
+
+            # If bounds are degenerate (single point), set center explicitly; otherwise fit bounds.
+            if minx == maxx and miny == maxy:
+                center_lat = (miny + maxy) / 2.0
+                center_lon = (minx + maxx) / 2.0
+                m.location = [center_lat, center_lon]
+                m.zoom_start = zoom_start
+            else:
+                # folium expects [[southWest_lat, southWest_lng], [northEast_lat, northEast_lng]]
+                m.fit_bounds([[miny, minx], [maxy, maxx]])
+        except Exception:
+            # if anything goes wrong, keep the original center/zoom
+            pass
 
     # Determine output path for the HTML file and ensure parent directories exist.
     outdir = Path("output")

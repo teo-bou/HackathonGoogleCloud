@@ -5,7 +5,7 @@ import os
 import uuid
 import time
 from pathlib import Path
-#from .streamlit_test import make_folium_map, REPO_GEOJSON_DIR
+# from .streamlit_test import make_folium_map, REPO_GEOJSON_DIR
 
 import streamlit.components.v1 as components
 from pathlib import Path
@@ -23,6 +23,14 @@ APP_NAME = "reforestAI-agent"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = REPO_ROOT / "output"
 OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+# Suggested questions defined at the top so the UI can take them from a single source
+SUGGESTED_QUESTIONS = [
+    "Who are you ?",
+    "What is a Fokontany or Grevillea ?",
+    "Show me a map of the Antavibe with grevillea patches on the Antavibe Fokonany.",
+    "List me the Fokontanys.",
+]
 
 # Initialize session state variables
 if "user_id" not in st.session_state:
@@ -159,7 +167,11 @@ def send_message(message):
 
     # Add assistant response to chat (include png_path and folium info if present)
     if assistant_message:
-        msg_entry = {"role": "assistant", "content": assistant_message, "png_path": png_path}
+        msg_entry = {
+            "role": "assistant",
+            "content": assistant_message,
+            "png_path": png_path,
+        }
         if folium_html_path:
             msg_entry["folium_html_path"] = folium_html_path
         if folium_layers_payload:
@@ -234,23 +246,21 @@ for msg in st.session_state.messages:
                         st.error(f"Failed to read/display Folium HTML: {e}")
                 else:
                     st.warning(f"Folium HTML file not accessible: {p}")
-                    # fallback: if the tool returned layers payload, build map locally
-                    layers = msg.get("layers")
-                    if layers:
-                        try:
-                            m, html_path_local = make_folium_map(
-                                layers,
-                                center=msg.get("center"),
-                                zoom_start=msg.get("zoom_start"),
-                                outfile_name=msg.get("outfile_name"),
-                            )
-                            from streamlit_folium import st_folium
-
-                            st_folium(m, width=800, height=600)
-                        except Exception as e:
-                            st.error(f"Failed to render Folium layers locally: {e}")
 # Input for new messages
 if st.session_state.session_id:  # Only show input if session exists
+    # Suggested question buttons (take first 4 from the top-level array)
+    with st.expander("Suggested questions", expanded=True):
+        cols = st.columns(4)
+        for i in range(4):
+            try:
+                q = SUGGESTED_QUESTIONS[i]
+            except IndexError:
+                q = None
+            if q:
+                if cols[i].button(q, key=f"suggest_{i}"):
+                    send_message(q)
+                    st.rerun()
+
     user_input = st.chat_input("Type your message...")
     if user_input:
         send_message(user_input)
