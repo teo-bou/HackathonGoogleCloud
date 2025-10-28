@@ -1,4 +1,4 @@
-# Google Cloud Hackathon – Geospatial Assistant ReforestAI
+# Google Cloud Hackathon – ReforestAI Assistant 
 
 Streamlit app + an LLM agent (Google ADK) to analyze and visualize reforestation data in Madagascar. It works with GeoJSON layers for Fokontany boundaries, Grevillea plantations, and Reforestation areas.
 
