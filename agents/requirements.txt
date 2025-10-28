@@ -1,0 +1,12 @@
+pyshp
+geopandas
+shapely
+pytest
+flake8
+pandas
+google-adk
+folium 
+python-multipart
+google-cloud-storage
+fsspec
+gcsfs

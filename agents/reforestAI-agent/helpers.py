@@ -1,41 +1,63 @@
 import math
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import numpy as np
 import pandas as pd
 import json
+from google.cloud import storage
+
+BUCKET_NAME = "reforestai-bucket"
 
 
 def load_geojson_file(path: str):
     """
-    Loads a geojson file
+    Loads a geojson file from GCS.
+    Args:
+        path (str): The path within the bucket to load the file from.
+    Returns:
+        dict: The loaded GeoJSON data.
     """
-    # Open and parse the GeoJSON file. Use json.load to parse directly from
-    # the file-like object (previous code accidentally passed the file object
-    # to f.read, causing a TypeError).
-    with open(path, "r") as f:
-        geojson = json.load(f)
-    return geojson
+
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+        # List blobs in the bucket and print their names
+        for b in bucket.list_blobs():
+            print(b.name)
+        blob = bucket.blob(path)
+        if blob.exists():
+            content = blob.download_as_string()
+            return json.loads(content)
+    except Exception as e:
+        print(e)
+        raise e
 
 
 def write_geojson_file(geojson: dict, path: str) -> str:
     """
-    Writes a geojson file
+    Writes a geojson file to a GCS bucket and returns a signed URL.
+    Args:
+        geojson (dict): The GeoJSON data to write.
+        path (str): The path within the bucket to write the file to.
     """
-    # Ensure parent directory exists (helps on Windows where '/tmp' may not exist)
-    from pathlib import Path
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(path)
 
-    p = Path(path)
-    if not p.parent.exists():
-        try:
-            p.parent.mkdir(parents=True, exist_ok=True)
-        except Exception:
-            # If we cannot create the parent, raise a clear error
-            raise
+        # Upload the file
+        blob.upload_from_string(json.dumps(geojson), content_type="application/json")
 
-    # Write JSON with UTF-8 encoding and ensure_ascii=False for readability
-    with open(p, "w", encoding="utf-8") as f:
-        json.dump(geojson, f, ensure_ascii=False)
-    return str(p)
+        # Generate a signed URL for the blob with a 5-hour expiration
+        signed_url = blob.generate_signed_url(
+            version="v4",
+            expiration=timedelta(hours=5),
+            method="GET",
+        )
+        return signed_url
+
+    except Exception as e:
+        print(e)
+        raise e
 
 
 def _sanitize_value(v):

@@ -1,6 +1,8 @@
 from google.adk.agents.llm_agent import Agent
 from .prompts import instructions
 from google.adk.tools import google_search
+from google.adk.tools import agent_tool
+
 
 from .tools import (
     query_geojson,
@@ -14,6 +16,13 @@ from .tools import (
     read_geojson_attributes,
 )
 
+search_agent = Agent(
+    model="gemini-2.5-flash",
+    name="search_agent",
+    description="This agent can search the internet for information.",
+    instruction="You are an agent that can search the internet for information.",
+    tools=[google_search],
+)
 
 root_agent = Agent(
     model="gemini-2.5-flash",
@@ -30,6 +39,6 @@ root_agent = Agent(
         enrich_geometry_fields,
         folium_show_layers,
         read_geojson_attributes,
-        google_search,
+        agent_tool.AgentTool(agent=search_agent),
     ],
 )

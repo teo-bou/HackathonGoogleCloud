@@ -1,15 +1,12 @@
 import streamlit as st
 import requests
 import json
-import os
 import uuid
 import time
-from pathlib import Path
-# from .streamlit_test import make_folium_map, REPO_GEOJSON_DIR
-
 import streamlit.components.v1 as components
-from pathlib import Path
-import json
+from google.cloud import storage
+import io
+import os
 
 
 # Set page config
@@ -18,11 +15,11 @@ st.set_page_config(
 )
 
 # Constants
-API_BASE_URL = "http://localhost:8000"
-APP_NAME = "reforestAI-agent"
-REPO_ROOT = Path(__file__).resolve().parents[1]
-OUTPUT_DIR = REPO_ROOT / "output"
-OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+API_BASE_URL = os.getenv(
+    "API_BASE_URL", "https://reforestai-agent-396062328299.europe-west9.run.app"
+)
+APP_NAME = os.getenv("APP_NAME", "reforestAI-agent")
+BUCKET_NAME = "reforestai-bucket"
 
 # Suggested questions defined at the top so the UI can take them from a single source
 SUGGESTED_QUESTIONS = [
@@ -44,6 +41,21 @@ if "messages" not in st.session_state:
 
 if "audio_files" not in st.session_state:
     st.session_state.audio_files = []
+
+
+def download_gcs_file(gcs_path: str):
+    """Downloads a file from GCS and returns its content as bytes."""
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(gcs_path.replace(f"gs://{BUCKET_NAME}/", ""))
+
+        if blob.exists():
+            return blob.download_as_bytes()
+    except Exception as e:
+        print(f"Error downloading from GCS: {e}")
+        st.error(f"Error downloading from GCS: {e}")
+    return None
 
 
 def create_session():
@@ -199,8 +211,8 @@ with st.sidebar:
             create_session()
 
     st.divider()
-    st.caption("This app interacts with the Speaker Agent via the ADK API Server.")
-    st.caption("Make sure the ADK API Server is running on port 8000.")
+    st.caption("This app interacts with the Reforest AI Agent via the ADK API Server.")
+
 
 # Chat interface
 st.subheader("Conversation")
@@ -216,36 +228,25 @@ for msg in st.session_state.messages:
             # Handle image if available
             if "png_path" in msg and msg["png_path"]:
                 png_path = msg["png_path"]
-                # Normalize into an absolute Path. If the agent returned a relative path
-                # or a path inside the repo (e.g. "output/xxx.png"), resolve it against REPO_ROOT.
-                p = Path(png_path)
-                if not p.is_absolute():
-                    p = REPO_ROOT / png_path
-                # As a safety, also check inside the canonical OUTPUT_DIR
-                if not p.exists():
-                    p = OUTPUT_DIR / p.name
-
-                if p.exists():
-                    st.image(str(p))
+                png_data = download_gcs_file(png_path)
+                if png_data:
+                    st.image(io.BytesIO(png_data))
                 else:
-                    st.warning(f"Image file not accessible: {p}")
+                    st.warning(f"Image file not accessible in GCS: {png_path}")
+
             # Handle Folium HTML map if available
             if "folium_html_path" in msg and msg["folium_html_path"]:
                 html_path = msg["folium_html_path"]
-                p = Path(html_path)
-                if not p.is_absolute():
-                    p = REPO_ROOT / html_path
-                if not p.exists():
-                    p = OUTPUT_DIR / p.name
-
-                if p.exists():
+                html_data = download_gcs_file(html_path)
+                if html_data:
                     try:
-                        html = p.read_text(encoding="utf-8")
+                        html = html_data.decode("utf-8")
                         components.html(html, height=700, scrolling=True)
                     except Exception as e:
                         st.error(f"Failed to read/display Folium HTML: {e}")
                 else:
-                    st.warning(f"Folium HTML file not accessible: {p}")
+                    st.warning(f"Folium HTML file not accessible in GCS: {html_path}")
+
 # Input for new messages
 if st.session_state.session_id:  # Only show input if session exists
     # Suggested question buttons (take first 4 from the top-level array)

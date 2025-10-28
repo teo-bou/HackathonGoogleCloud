@@ -1,21 +1,19 @@
 import geopandas as gpd
-from .helpers import _sanitize_value, load_geojson_file, write_geojson_file
+from .helpers import _sanitize_value, load_geojson_file, write_geojson_file, BUCKET_NAME
 from typing import List, Dict, Any, Optional
 import json
 import os
+from google.cloud import storage
 
 
 def list_file_in_map_data_directory():
     """
-    List all files in the 'Map_Data' directory.
+    List all files in the GCS bucket.
     """
-    import os
-
-    base_path = "map_data/geojson"
-    files = []
-    for entry in os.scandir(base_path):
-        if entry.is_file():
-            files.append(entry.name)
+    storage_client = storage.Client()
+    bucket = storage_client.bucket(BUCKET_NAME)
+    blobs = bucket.list_blobs()
+    files = [blob.name for blob in blobs]
     return {"status": "success", "files": files}
 
 
@@ -102,8 +100,6 @@ def transform_geojson(geojson_path: str, query: str, geojson_output_path: str):
         geojson_path (str): path of the GeoJSON FeatureCollection.
         query (str): Geopandas-style query string.
         geojson_output_path (str) : path to write the goejson output to
-    Returns:
-        dict: Resulting GeoJSON FeatureCollection after applying the query.
     """
     geojson = load_geojson_file(geojson_path)
     try:
@@ -117,10 +113,18 @@ def transform_geojson(geojson_path: str, query: str, geojson_output_path: str):
         return {"status": "error", "message": f"failed to execute query: {e}"}
 
     if result.empty:
-        return {
-            "status": "success",
-            "data": {"type": "FeatureCollection", "features": []},
-        }
+        empty_geojson = {"type": "FeatureCollection", "features": []}
+        try:
+            output_path = write_geojson_file(empty_geojson, geojson_output_path)
+            return {
+                "status": "success",
+                "message": f"Query resulted in no features. Empty GeoJSON file written to {output_path}",
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"failed to write empty GeoJSON file: {e}",
+            }
 
     try:
         geojson_str = result.to_json()
@@ -134,7 +138,7 @@ def transform_geojson(geojson_path: str, query: str, geojson_output_path: str):
 
     return {
         "status": "success",
-        "message": f"Successfully operating the query to {output_path}",
+        "message": f"Successfully applied query and saved result to {output_path}",
     }
 
 
@@ -230,14 +234,23 @@ def geojson_to_png(geojson_path: str, filename: str = "output.png"):
         png_bytes = buffer.getvalue()
 
         # Save the file in a directory for debug
-        output_dir = "output"
-        os.makedirs(output_dir, exist_ok=True)
-        with open(os.path.join(output_dir, filename), "wb") as f:
-            f.write(png_bytes)
+        # Upload PNG bytes to GCS bucket as well
+        try:
+            storage_client = storage.Client()
+            bucket = storage_client.bucket(BUCKET_NAME)
+            blob = bucket.blob(filename)
+            blob.upload_from_string(png_bytes, content_type="image/png")
+            gcs_uri = f"gs://{BUCKET_NAME}/{filename}"
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": f"failed to upload PNG to bucket: {e}",
+            }
+
         return {
             "status": "success",
             "message": {
-                "file saved as:": f"{filename}",
+                "file saved as:": f"{gcs_uri}",
             },
         }
     except Exception as e:
@@ -411,75 +424,95 @@ def folium_show_layers(
     outfile_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
-    Display multiple geographic layers (GeoJSON) on a Folium map,
-    with customizable styles and tooltips, then save this map to an HTML file.
+    Display multiple geographic layers (GeoJSON) from GCS or local path on a Folium map,
+    with customizable styles and tooltips, then save this map to a Google Cloud Storage bucket.
 
-    The map will be centered and zoomed to the combined bounds of the provided layers
-    (if any layers contain geometry). If no geometry is found, falls back to the
-    provided `center` or the default center.
+    The layer 'path' can be a local file path or a GCS URI (e.g., 'gs://bucket/file.geojson').
+    The map will be centered and zoomed to the combined bounds of the provided layers.
 
     layers: list of dicts:
-    - path: str (relative to repo or absolute)
+    - path: str (local path or GCS URI)
     - name: str
     - style: dict (fillColor, color, fillOpacity, weight, etc.)
     - tooltip_fields: list[str]
     - tooltip_aliases: list[str]
-    Returns: dict with status and html_path
+
+        Returns: dict with status, gcs_uri (html_path), and layers.
     """
-    import folium, json, os
+    import folium
+    import json
+    import os
     from pathlib import Path
-    import streamlit_folium  # optional, not used to save html but for testing locally
+    from typing import List, Dict, Any, Optional
 
-    # helper to resolve path in repo
-    REPO_ROOT = Path.cwd()  # adjust if repo root differs
-    REPO_GEOJSON_DIR = REPO_ROOT / "map_data" / "geojson"
+    # ADDED IMPORT FOR GCS CLIENT
+    try:
+        from google.cloud import storage
+    except ImportError:
+        return {
+            "status": "error",
+            "message": "Missing required library: google-cloud-storage. Please install it.",
+        }
 
-    # default center (Madagascar) if not provided
+    # REQUIRED LIBRARIES FOR GEOPANDAS/FSSPEC
+    try:
+        import geopandas as gpd
+        import fsspec
+    except ImportError as e:
+        return {
+            "status": "error",
+            "message": f"Missing required libraries: {e}. Please install folium, geopandas, and fsspec/gcsfs.",
+        }
+
+    # Default center (Madagascar) if not provided
     if center is None:
         center = [-19.0, 47.0]
 
-    # create map with initial center; we'll call fit_bounds later if we can compute bounds
     m = folium.Map(location=center, zoom_start=zoom_start, tiles=tiles)
-
-    # collect bounds from layers (minx, miny, maxx, maxy)
     bounds_list = []
 
+    # --- 1. Process Layers (Read from GCS or local using fsspec) ---
     for layer in layers:
         raw_path = layer.get("path")
         if not raw_path:
             continue
-        p = Path(raw_path)
-        if not p.is_absolute():
-            p = REPO_GEOJSON_DIR / raw_path
-        if not p.exists():
-            p = REPO_ROOT / raw_path
-        if not p.exists():
-            # skip missing layer
-            continue
 
+        geojson_data = None
         try:
-            geojson_data = json.loads(p.read_text(encoding="utf-8"))
-        except Exception:
+            # fsspec handles reading from local paths and GCS (gs://)
+            with fsspec.open(
+                f"gs://{BUCKET_NAME}/{raw_path}", "r", encoding="utf-8"
+            ) as f:
+                geojson_data = json.load(f)
+        except FileNotFoundError:
+            print(f"Skipping layer: File not found at path: {raw_path}")
+            continue
+        except Exception as e:
+            print(
+                f"Skipping layer: Failed to read/parse GeoJSON from {raw_path}. Error: {e}"
+            )
             continue
 
-        # attempt to compute bounds using geopandas if possible
+        # Bounds Computation
         try:
             feats = (
                 geojson_data.get("features") if isinstance(geojson_data, dict) else None
             )
             if feats:
-                gdf = gpd.GeoDataFrame.from_features(feats)
+                gdf = gpd.GeoDataFrame.from_features(feats, crs="EPSG:4326")
                 if not gdf.empty:
                     minx, miny, maxx, maxy = map(float, gdf.total_bounds)
                     bounds_list.append((minx, miny, maxx, maxy))
         except Exception:
-            # ignore bounds computation failure for this layer
             pass
 
+        # Folium Layer Creation
         style = layer.get("style") or {}
+        default_name = Path(raw_path).stem if raw_path else "Layer"
+
         gj = folium.GeoJson(
             geojson_data,
-            name=layer.get("name", p.stem),
+            name=layer.get("name", default_name),
             style_function=(lambda f, s=style: s) if style else None,
         )
 
@@ -496,7 +529,7 @@ def folium_show_layers(
 
     folium.LayerControl().add_to(m)
 
-    # If we accumulated bounds from one or more layers, compute the union bounds and fit the map
+    # Fit Bounds Logic
     if bounds_list:
         try:
             minx = min(b[0] for b in bounds_list)
@@ -504,44 +537,59 @@ def folium_show_layers(
             maxx = max(b[2] for b in bounds_list)
             maxy = max(b[3] for b in bounds_list)
 
-            # If bounds are degenerate (single point), set center explicitly; otherwise fit bounds.
             if minx == maxx and miny == maxy:
                 center_lat = (miny + maxy) / 2.0
                 center_lon = (minx + maxx) / 2.0
                 m.location = [center_lat, center_lon]
                 m.zoom_start = zoom_start
             else:
-                # folium expects [[southWest_lat, southWest_lng], [northEast_lat, northEast_lng]]
                 m.fit_bounds([[miny, minx], [maxy, maxx]])
         except Exception:
-            # if anything goes wrong, keep the original center/zoom
             pass
 
-    # Determine output path for the HTML file and ensure parent directories exist.
+    # --- 2. Render and Upload to GCS Bucket ---
+
+    # Determine output path for the HTML file (for use as blob name)
     outdir = Path("output")
-    # Normalize outfile_name: accept absolute paths or relative paths that may already include 'output/'.
     if not outfile_name:
+        # Use a unique name if none is provided
         outfile_name = f"folium_map_{os.getpid()}.html"
 
+    # Handle paths consistently to get the desired GCS blob name
     candidate = Path(outfile_name)
     if candidate.is_absolute():
+        # If absolute, just use the filename
         outpath = candidate
     else:
-        # If the user provided a relative path that already starts with the output directory
-        # (e.g. "output/grevillea.html"), resolve it relative to the repo root so we don't
-        # accidentally create output/output/...
+        # If relative and starts with 'output/', keep it relative to CWD
         if len(candidate.parts) > 0 and candidate.parts[0] == outdir.name:
             outpath = Path.cwd() / candidate
         else:
+            # Otherwise, put it in the 'output' directory
             outpath = outdir / candidate
 
-    # Ensure the parent directory exists before saving
+    # Render the folium map to an HTML string
     try:
-        outpath.parent.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        # If we cannot create the directory, raise a clear error so the caller can handle it
-        raise
+        rendered = m.get_root().render()
+    except Exception as e:
+        return {"status": "error", "message": f"Failed to render HTML: {e}"}
 
-    m.save(str(outpath))
+    # Upload the rendered HTML to the configured GCS bucket
+    try:
+        storage_client = storage.Client()
+        bucket = storage_client.bucket(BUCKET_NAME)
 
-    return {"status": "success", "html_path": str(outpath), "layers": layers}
+        # Use a sensible blob name: use the relative path or just the filename if absolute
+        blob_name = outpath.as_posix() if not outpath.is_absolute() else outpath.name
+
+        blob = bucket.blob(blob_name)
+        # Use upload_from_string for the in-memory HTML content
+        blob.upload_from_string(rendered, content_type="text/html")
+        gcs_uri = f"gs://{BUCKET_NAME}/{blob_name}"
+    except Exception as e:
+        return {
+            "status": "error",
+            "message": f"Failed to upload HTML to bucket '{BUCKET_NAME}': {e}",
+        }
+
+    return {"status": "success", "html_path": gcs_uri, "layers": layers}

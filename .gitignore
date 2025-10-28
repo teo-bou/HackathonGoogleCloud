@@ -6,3 +6,9 @@ reforestAI-agent/__pycache__
 reforestAI-agent/.env
 .reforestAI-agent.venv
 .venv
+agents/reforestAI-agent/__pycache__
+agents/reforestAI-agent/.env
+service_account_credentials.json
+uv.lock
+pyproject.toml
+.python-version
