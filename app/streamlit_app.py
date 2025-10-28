@@ -30,6 +30,7 @@ SUGGESTED_QUESTIONS = [
     "What is a Fokontany or Grevillea ?",
     "Show me a map of the Antavibe with grevillea patches on the Antavibe Fokonany.",
     "List me the Fokontanys.",
+    "Generate a map that includes only the 'Reboisement' and 'Grevillea' layers restricted to the Ambalona Fokontany region.",
 ]
 
 # Initialize session state variables

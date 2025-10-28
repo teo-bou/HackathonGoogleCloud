@@ -481,7 +481,7 @@ def folium_show_layers(
         default_styles = {
         "Fokontany": {"fillColor": "#c5d9ff", "color": "#2b6cb0", "fillOpacity": 0.35, "weight": 3},
         "Grevillea": {"fillColor": "#2ecc71", "color": "#1e8844", "fillOpacity": 0.9, "weight": 1},
-        "Reboisement": {"fillColor": "#f39c12", "color": "#B8860B", "fillOpacity": 0.45, "weight": 2}
+        "Reboisement": {"fillColor": "#f39c12", "color": "#F0E68C", "fillOpacity": 0.45, "weight": 2}
         }
 
         style = layer.get("style") or default_styles.get(name, {})
