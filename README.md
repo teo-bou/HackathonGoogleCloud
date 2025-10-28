@@ -62,22 +62,3 @@ streamlit run app/streamlit_app.py
 ```
 
 In the app sidebar, create a new session, then ask questions or click suggested prompts.
-
-
-
-## Troubleshooting
-
-- "Custom tiles must have an attribution" (Folium):
-  - Use a known provider name (e.g., `CartoDB Positron`) or, if using a custom tile URL, also provide an attribution string.
-- "The input token count exceeds the maximum" (400 INVALID_ARGUMENT):
-  - Start a new session in Streamlit and avoid printing entire GeoJSON in responses. Ask the agent to save results to files and return only paths/summaries.
-- Nothing appears on the map:
-  - Check that input files exist in `Map_Data/geojson/` and that geometries are valid.
-
-
-## Roadmap Ideas
-
-- Aggregation tool for reforested area by Fokontany (year filters, CSV/choropleth export).
-- Geometry validation/repair utilities.
-- Richer legend/layer presets and additional basemaps.
-
