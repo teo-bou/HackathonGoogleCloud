@@ -18,7 +18,7 @@ st.set_page_config(
 )
 
 # Constants
-API_BASE_URL = "http://localhost:8000"
+API_BASE_URL = os.environ.get("API_BASE_URL", "http://reforestai_api:8000")
 APP_NAME = "reforestAI-agent"
 REPO_ROOT = Path(__file__).resolve().parents[1]
 OUTPUT_DIR = REPO_ROOT / "output"
@@ -62,20 +62,39 @@ def create_session():
         POST /apps/{app_name}/users/{user_id}/sessions/{session_id}
     """
     session_id = f"session-{int(time.time())}"
-    response = requests.post(
-        f"{API_BASE_URL}/apps/{APP_NAME}/users/{st.session_state.user_id}/sessions/{session_id}",
-        headers={"Content-Type": "application/json"},
-        data=json.dumps({}),
-    )
+    url = f"{API_BASE_URL}/apps/{APP_NAME}/users/{st.session_state.user_id}/sessions/{session_id}"
 
-    if response.status_code == 200:
-        st.session_state.session_id = session_id
-        st.session_state.messages = []
-        st.session_state.audio_files = []
-        return True
-    else:
-        st.error(f"Failed to create session: {response.text}")
-        return False
+    # Try a few times in case the API container isn't ready yet (common in compose)
+    max_retries = 6
+    for attempt in range(1, max_retries + 1):
+        try:
+            response = requests.post(
+                url,
+                headers={"Content-Type": "application/json"},
+                data=json.dumps({}),
+                timeout=5,
+            )
+        except requests.exceptions.RequestException as e:
+            # Connection refused or other network error — retry with backoff
+            wait = attempt * 1
+            st.warning(f"Attempt {attempt}/{max_retries}: API not reachable at {API_BASE_URL} (error: {e}). Retrying in {wait}s...")
+            time.sleep(wait)
+            continue
+
+
+        if response.status_code == 200:
+            st.session_state.session_id = session_id
+            st.session_state.messages = []
+            st.session_state.audio_files = []
+            return True
+        else:
+            st.error(f"Failed to create session: {response.status_code} {response.text}")
+            return False
+
+    # If we exhausted retries
+    st.error(f"Could not reach API at {API_BASE_URL} after {max_retries} attempts. Is the API container running and reachable from this Streamlit instance?")
+    return False
+
 
 
 def send_message(message):

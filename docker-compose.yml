@@ -1,0 +1,31 @@
+version: "3.8"
+services:
+  api:
+    build: .
+    container_name: reforestai_api
+    # Use absolute path to python inside the image's conda install to avoid PATH issues
+    command: bash -lc "/opt/conda/bin/python -m google.adk.cli api_server --host 0.0.0.0 --port 8000"
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./:/workspace:rw
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: unless-stopped
+
+  streamlit:
+    build: .
+    container_name: reforestai_streamlit
+    # Use absolute path to streamlit so the service finds the binary reliably
+    command: bash -lc "/opt/conda/bin/streamlit run app/streamlit_app.py --server.port=8501 --server.headless=true"
+    ports:
+      - "8501:8501"
+    volumes:
+      - ./:/workspace:rw
+    environment:
+      # Use the compose service name 'api' (recommended) and avoid extra quotes
+      - API_BASE_URL=http://api:8000
+      - PYTHONUNBUFFERED=1
+    depends_on:
+      - api
+    restart: unless-stopped

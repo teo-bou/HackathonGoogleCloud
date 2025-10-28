@@ -6,3 +6,4 @@ reforestAI-agent/__pycache__
 reforestAI-agent/.env
 .reforestAI-agent.venv
 .venv
+app/__pycache__

@@ -517,31 +517,48 @@ def folium_show_layers(
             # if anything goes wrong, keep the original center/zoom
             pass
 
-    # Determine output path for the HTML file and ensure parent directories exist.
+    # Determine output path for the HTML file and ensure it is written into the
+    # repository's `output/` folder so other services (Streamlit) sharing the
+    # project volume can access it when running in separate containers.
     outdir = Path("output")
-    # Normalize outfile_name: accept absolute paths or relative paths that may already include 'output/'.
     if not outfile_name:
         outfile_name = f"folium_map_{os.getpid()}.html"
 
     candidate = Path(outfile_name)
+
+    # If caller provided an absolute path that is inside the repo (cwd), keep it;
+    # otherwise, always write into the repo-local `output/` directory to ensure
+    # the file is available via the shared volume mounted at the repo root.
+    try:
+        repo_root = Path.cwd()
+    except Exception:
+        repo_root = Path(".")
+
     if candidate.is_absolute():
-        outpath = candidate
+        try:
+            # If the absolute path is a descendant of the repo root, keep it.
+            if repo_root in candidate.parents or candidate == repo_root:
+                outpath = candidate
+            else:
+                # Absolute path outside the repo (e.g. /tmp/...): redirect to repo output
+                outpath = outdir / candidate.name
+        except Exception:
+            outpath = outdir / candidate.name
     else:
-        # If the user provided a relative path that already starts with the output directory
-        # (e.g. "output/grevillea.html"), resolve it relative to the repo root so we don't
-        # accidentally create output/output/...
+        # Relative path: if it already starts with 'output/', resolve relative to repo
         if len(candidate.parts) > 0 and candidate.parts[0] == outdir.name:
-            outpath = Path.cwd() / candidate
+            outpath = repo_root / candidate
         else:
-            outpath = outdir / candidate
+            outpath = repo_root / outdir / candidate
 
     # Ensure the parent directory exists before saving
-    try:
-        outpath.parent.mkdir(parents=True, exist_ok=True)
-    except Exception:
-        # If we cannot create the directory, raise a clear error so the caller can handle it
-        raise
+    outpath.parent.mkdir(parents=True, exist_ok=True)
 
+    # Save map HTML into the chosen path
     m.save(str(outpath))
 
-    return {"status": "success", "html_path": str(outpath), "layers": layers}
+    # Return a repo-relative path (preferring 'output/...' form) so calling clients
+    # can resolve it against the repository mount. Also include the absolute path
+    # for convenience in local single-container setups.
+    rel_path = str(outpath.relative_to(repo_root)) if repo_root in outpath.parents or outpath == repo_root else str(outpath.name)
+    return {"status": "success", "html_path": rel_path, "abs_path": str(outpath), "layers": layers}
