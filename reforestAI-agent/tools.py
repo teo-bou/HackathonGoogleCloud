@@ -407,7 +407,7 @@ def folium_show_layers(
     layers: List[Dict[str, Any]],
     center: Optional[List[float]] = None,
     zoom_start: int = 7,
-    tiles: str = "OpenStreetMap",
+    tiles: Optional[str] =  "OpenStreetMap",
     outfile_name: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
@@ -476,7 +476,15 @@ def folium_show_layers(
             # ignore bounds computation failure for this layer
             pass
 
-        style = layer.get("style") or {}
+
+        name = layer.get("name", p.stem)
+        default_styles = {
+        "Fokontany": {"fillColor": "#c5d9ff", "color": "#2b6cb0", "fillOpacity": 0.35, "weight": 3},
+        "Grevillea": {"fillColor": "#2ecc71", "color": "#1e8844", "fillOpacity": 0.9, "weight": 1},
+        "Reboisement": {"fillColor": "#f39c12", "color": "#B8860B", "fillOpacity": 0.45, "weight": 2}
+        }
+
+        style = layer.get("style") or default_styles.get(name, {})
         gj = folium.GeoJson(
             geojson_data,
             name=layer.get("name", p.stem),
