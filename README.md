@@ -1,7 +1,8 @@
 # 🌳 ReforestAI – Geospatial Assistant  
 ### *Google Cloud Hackathon Project*
 
-> 🛰️ A Streamlit app powered by an LLM Agent (Google ADK) to **analyze, query, and visualize reforestation data in Madagascar** using geospatial intelligence, in order to **support the NGO Interaide in their reforestation and sustainable development mission**.
+> 🛰️ A Streamlit app powered by an LLM Agent (Google ADK) to **analyze, query, and visualize reforestation data in Madagascar**, in order to **support the NGO Interaide in their reforestation and sustainable development mission**.
+
 ---
 
 ## 🌍 Overview
@@ -47,20 +48,20 @@ It integrates:
 
 ## ⚙️ Prerequisites
 
-### Local (sans Docker)
-- 🐍 **Python 3.10+** (3.12 recommandé)  
-- 🔑 **Google API Key** pour l’agent LLM  
-- 📦 Dépendances dans `requirements.txt` (GeoPandas, Fiona, Folium, etc.)
+### Local (without Docker)
+- 🐍 **Python 3.10+** (3.12 recommended)  
+- 🔑 **Google API Key** for the LLM agent  
+- 📦 Dependencies listed in `requirements.txt` (GeoPandas, Fiona, Folium, etc.)
 
 ### Docker
 - 🐳 **Docker** 20.10+  
 - 🧩 **Docker Compose** v2+
 
-> 💡 Sous Windows, utilise Docker Desktop ; sous Linux/macOS, installe Docker Engine + Compose Plugin.
+> 💡 On Windows, use Docker Desktop. On Linux/macOS, install Docker Engine + Compose Plugin.
 
 ---
 
-## 🧰 Setup (Local)
+## 🧰 Local Setup
 
 ### macOS / Linux
 ```bash
@@ -80,59 +81,59 @@ pip install -r requirements.txt
 
 ## 🔐 API Configuration
 
-1️⃣ Copier l’exemple d’environnement :
+1️⃣ Copy the example environment file:
 ```bash
 cp reforestAI-agent/.env.example reforestAI-agent/.env
 ```
 
-2️⃣ Ajouter la clé :
+2️⃣ Add your API key:
 ```
 GOOGLE_API_KEY=<your_key>
 ```
-> Crée une clé sur [Google AI Studio](https://aistudio.google.com/app/api-keys)
+> You can create an API key at [Google AI Studio](https://aistudio.google.com/app/api-keys)
 
 ---
 
 ## 🚀 Running (Local)
 
-### 1) Lancer le serveur ADK
+### 1) Start the ADK server
 ```bash
 adk run reforestAI-agent
 ```
-> Le serveur doit écouter `http://localhost:8000` et exposer l’app `reforestAI-agent`.
+> The server must listen on `http://localhost:8000` and expose the app `reforestAI-agent`.
 
-### 2) Lancer l’app Streamlit
+### 2) Launch the Streamlit app
 ```bash
 streamlit run app/streamlit_app.py
 ```
 
-Dans la sidebar, crée une session puis utilise les prompts proposés.
+In the sidebar, create a session and start exploring spatial data through chat prompts.
 
 ---
 
 ## 🐳 Running with Docker
 
-### Structure fournie
-Le dépôt inclut un `Dockerfile` (app) et un `docker-compose.yml` orchestrant :
-- `agent` : le serveur Google ADK  
-- `web` : l’interface Streamlit  
-- un volume pour `output/` afin de récupérer les cartes exportées
+### Provided structure
+The repository includes a `Dockerfile` (for the app) and a `docker-compose.yml` orchestrating:
+- `agent` : Google ADK server  
+- `web` : Streamlit web interface  
+- A volume for `output/` to retrieve exported maps
 
-> **Variables d’environnement** : assure-toi que `reforestAI-agent/.env` contient `GOOGLE_API_KEY`.
+> **Environment variables**: ensure `reforestAI-agent/.env` contains your `GOOGLE_API_KEY`.
 
 ### 1) Build & Run
 ```bash
 docker compose up --build
 ```
 
-### 2) Accès à l’application
-- Streamlit (web UI) : http://localhost:8501  
+### 2) Access the application
+- Streamlit (Web UI): http://localhost:8501  
 
 ## 🧠 Example Queries
 
 - “Show me a map of the Antavibe with grevillea patches on the Antavibe Fokonany.”  
 - “Generate a map that includes only the 'Reboisement' and 'Grevillea' layers restricted to the Ambalona Fokontany region.”  
-- “List me the Fokontanys in the Sandrohy Commune.”
+- “List me the Fokontanys in the Sandrohy Commune.”  
 - "Show me a map of Grevillea plantations where the surface area is greater than 5000 m²."  
 
 ---
@@ -147,7 +148,7 @@ docker compose up --build
 | 💾 Data | GeoJSON |
 | 🔌 API | HTTP (Agent @ `:8000`) |
 | 🐳 Runtime | Docker & Docker Compose |
-| 🧰 Langage | Python 3.12 |
+| 🧰 Language | Python 3.12 |
 
 ---
 
@@ -156,7 +157,9 @@ docker compose up --build
 The app is live and accessible online! 🚀  
 
 You can explore the interactive interface and test the LLM agent directly here:  
-👉 **[https://reforestai.streamlit.app]( https://reforestai-agent-front-396062328299.europe-west9.run.app/)** 
+👉 **[https://reforestai-agent-front-396062328299.europe-west9.run.app/](https://reforestai-agent-front-396062328299.europe-west9.run.app/)**  
+
+> 💡 The online version uses the same ADK Agent backend and geospatial datasets but may have limited export capabilities.
 
 ---
 
