@@ -98,7 +98,7 @@ GOOGLE_API_KEY=<your_key>
 
 ### 1) Start the ADK server
 ```bash
-adk run reforestAI-agent
+adk api_server
 ```
 > The server must listen on `http://localhost:8000` and expose the app `reforestAI-agent`.
 
