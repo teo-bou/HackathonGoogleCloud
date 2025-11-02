@@ -20,9 +20,7 @@ It integrates:
 ## 🎬 Demo
 
 Watch a quick demo of the ReforestAI agent in action.
-
-<video src="demo.mp4" controls="controls" style="max-width: 730px;">
-</video>
+See the demo at `demo.mp4`
 
 ---
 
